@@ -1,13 +1,74 @@
+class TokenQueue { // From GPT
+    constructor(audioDict) {
+        this.queue = [];
+        this.processing = false;
+        this.audioDict = audioDict;
+    }
+  
+    enqueue(token) {
+        this.queue.push(token);
+        if (!this.processing) {
+            this.startProcessing();
+        }
+    }
+
+    enqueueMany(tokens) {
+        this.queue.push(...tokens); // Add all tokens to the queue
+        if (!this.processing) {
+          this.startProcessing();
+        }
+    }
+  
+    async startProcessing() {
+        this.processing = true;
+        while (this.queue.length > 0) {
+            const token = this.queue.shift();
+            await this.playAudio(token);
+        }
+        this.processing = false;
+    }
+  
+    async playAudio(token) {
+        const audio = this.audioDict[token];
+        if (!audio) {
+            console.warn(`No audio for token: "${token}"`);
+            return;
+        }
+    
+        // Clone the audio element to allow overlap/restarts
+        const audioClone = audio.cloneNode();
+        audioClone.play();
+    
+        await new Promise(resolve => {
+                audioClone.onended = resolve;
+                audioClone.onerror = () => {
+                console.error(`Failed to play audio for token: "${token}"`);
+                resolve();
+            };
+        });
+    }
+}
+  
+
 const output = document.getElementById("output")
 const mapContainer = document.getElementById("map-container");
-const boom = document.getElementById("boom-test");
 let id;
 update = 0;
 
+const audioDict = {
+    "1l": new Audio("vine-boom.mp3"),
+    "2l": new Audio("vine-boom-reverb.mp3"),
+    "3l": new Audio("vine-boom-pitch.mp3"),
+    "4l": new Audio("vine-boom-tempo.mp3"),
+    "s": new Audio("vine-boom-reverse.mp3"),
+};
+
+const queue = new TokenQueue(audioDict);
+
 targets = [
-    { latitude: 52.227306, longitude: -0.677861, visited: false, range: 30 },
-    { latitude: 52.244722, longitude: -0.675694, visited: false, range: 30 },
-    { latitude: 52.257722, longitude: -0.678389, visited: false, range: 30 }
+    { latitude: 52.227306, longitude: -0.677861, visited: false, range: 30, tokens: "1l" },
+    { latitude: 52.244722, longitude: -0.675694, visited: false, range: 30, tokens: "2l,3l"},
+    { latitude: 52.257722, longitude: -0.678389, visited: false, range: 30, tokens: "4l,s"}
 ]
 
 const options = {
@@ -62,10 +123,6 @@ function success(position){
         <strong>Update:<\strong> ${update}
     `;
 
-    // <strong>Distance1:</strong> ${getDistanceFromLatLonInMeters(latitude, longitude, target1.latitude, target1.longitude)} meters <br>
-    // <strong>Distance2:</strong> ${getDistanceFromLatLonInMeters(latitude, longitude, target2.latitude, target2.longitude)} meters <br>
-    // <strong>Distance3:</strong> ${getDistanceFromLatLonInMeters(latitude, longitude, target3.latitude, target3.longitude)} meters <br>
-
     update++;
 
     targets.forEach(element => {
@@ -73,7 +130,8 @@ function success(position){
             distance = getDistanceFromLatLonInMeters(latitude, longitude, element.latitude, element.longitude);
             if (distance <= element.range) {
                 element.visited = true;
-                boom.play();
+                tokensToAdd = element.tokens.split(",");
+                queue.enqueueMany(tokensToAdd);
             }
         }
     });
@@ -82,6 +140,12 @@ function success(position){
 
 function error(error) {
     output.textContent = `Error: ${error.message}`;
+}
+
+function testAudio() {
+    for (const element of targets) {
+        queue.enqueueMany(element.tokens.split(","));
+    }
 }
 
 
@@ -134,3 +198,5 @@ function getDistanceFromLatLonInMeters(lat1, lon1, lat2, lon2) {
   
     return R * c;
 }
+
+// setTimeout(() => queue.enqueueMany(["1l", "2l", "3l"]), 3000);
